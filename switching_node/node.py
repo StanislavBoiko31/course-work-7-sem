@@ -1,9 +1,9 @@
 import itertools
-import statistics
 from dataclasses import dataclass
 
 from .distributions import FunRand
-from .elements import Create, Dispose, Process, RouteBlocking
+from .elements import (Create, Dispose, Process, RouteBlocking,
+                       Synchronization)
 from .params import ModelParams
 
 DIRECTIONS = (0, 1)
@@ -22,42 +22,50 @@ class Results:
     mean_q0: float
     mean_qline: tuple
     sojourn_mean: tuple
-    sojourn_sd: tuple
-    sojourn_min: tuple
-    sojourn_max: tuple
     profit_rate: float
 
 
 class SwitchingNodeModel:
-    def __init__(self, params=ModelParams(), seed=1, protocol=None):
+    def __init__(self, params=ModelParams(), seed=1, protocol=None,
+                 keep_sojourn=False):
         p = self.p = params
         rand = [FunRand(seed * 100 + i) for i in range(4)]
         ids = itertools.count(1)
-        self.blocking = [RouteBlocking(f"B{k + 1}", p.limit)
-                         for k in DIRECTIONS]
-        self.exits = [Dispose(f"Вихід {k + 1}", self.blocking[k])
+        self.exits = [Dispose(f"N{k + 1}", keep_sojourn)
                       for k in DIRECTIONS]
-        self.lines = [Process(f"Лінія {k + 1}",
-                              lambda k=k: p.line_time[k],
-                              lambda msg: self.exits[msg.direction],
-                              "кінець передачі #{id} лінією {k}")
+        self.lines = [Process(f"L{k + 1}", lambda k=k: p.line_time[k],
+                              self.exits[k],
+                              f"кінець передачі #{{id}} лінією {k + 1}")
                       for k in DIRECTIONS]
-        self.processor = Process(
-            "Процесор", lambda: rand[2].unif(p.proc_mean, p.proc_half),
-            lambda msg: self.lines[msg.direction],
-            "кінець обробки #{id} (н{k})")
+        self.sync = Synchronization(
+            "BP", lambda: self.processors[0].busy
+            + self.processors[1].busy == 1)
+        self.processors = [
+            Process(f"P{k + 1}",
+                    lambda: rand[2].unif(p.proc_mean, p.proc_half),
+                    self.lines[k], f"кінець обробки #{{id}} у P{k + 1}",
+                    self.sync)
+            for k in DIRECTIONS]
+        self.blocking = [
+            RouteBlocking(f"B{k + 1}",
+                          lambda k=k: self.in_node(k) == p.limit)
+            for k in DIRECTIONS]
         self.sources = [
             Create(f"Надходження {k + 1}", k,
                    lambda k=k: rand[k].norm(p.arrival_mean[k],
                                             p.arrival_sd[k]),
-                   self.blocking[k], self.processor, ids)
+                   self.blocking[k], self.processors[k], ids)
             for k in DIRECTIONS]
-        self.timed = [*self.sources, self.processor, *self.lines]
-        self.stat = [self.processor, *self.lines]
+        self.timed = [*self.sources, *self.processors, *self.lines]
+        self.stat = [*self.processors, *self.lines]
         self.order = rand[3]
         self.protocol = protocol
         self.t = 0.0
         self.t_start = 0.0
+
+    def in_node(self, k):
+        P, L = self.processors[k], self.lines[k]
+        return len(P.queue) + P.busy + len(L.queue) + L.busy
 
     def simulate(self, t_mod, t_warmup=0.0):
         self.run(t_warmup)
@@ -97,25 +105,18 @@ class SwitchingNodeModel:
         T = self.t - self.t_start
         n_in = tuple(s.n_in for s in self.sources)
         n_fail = tuple(s.n_fail for s in self.sources)
-        n_out = tuple(len(x.sojourn) for x in self.exits)
+        n_out = tuple(x.n_out for x in self.exits)
         profit = sum(n_out[k] * self.p.margin(k) for k in DIRECTIONS)
-
-        def sojourn(f, n_min=1):
-            return tuple(f(x.sojourn) if len(x.sojourn) >= n_min else 0.0
-                         for x in self.exits)
-
         return Results(
             t_obs=T, n_in=n_in, n_fail=n_fail, n_out=n_out,
             p_fail=tuple(f / n if n else 0.0 for f, n in zip(n_fail, n_in)),
             throughput=tuple(n / T for n in n_out),
-            util_proc=self.processor.busy_time / T,
+            util_proc=sum(e.busy_time for e in self.processors) / T,
             util_line=tuple(e.busy_time / T for e in self.lines),
-            mean_q0=self.processor.queue_time / T,
+            mean_q0=sum(e.queue_time for e in self.processors) / T,
             mean_qline=tuple(e.queue_time / T for e in self.lines),
-            sojourn_mean=sojourn(statistics.fmean),
-            sojourn_sd=sojourn(statistics.stdev, 2),
-            sojourn_min=sojourn(min),
-            sojourn_max=sojourn(max),
+            sojourn_mean=tuple((x.sum_out - x.sum_in) / x.n_out
+                               if x.n_out else 0.0 for x in self.exits),
             profit_rate=profit / T,
         )
 
@@ -123,29 +124,32 @@ class SwitchingNodeModel:
         def busy(e):
             return f"#{e.current.id}" if e.current else "-"
 
-        q0 = "".join(str(m.direction + 1) for m in self.processor.queue)
+        p1, p2 = self.processors
+        l1, l2 = self.lines
         return {
             "t": self.t, "event": text,
-            "Q0": q0 or "-", "P": busy(self.processor),
-            "Q1": len(self.lines[0].queue), "L1": busy(self.lines[0]),
-            "Q2": len(self.lines[1].queue), "L2": busy(self.lines[1]),
-            "n": tuple(b.n for b in self.blocking),
+            "Q01": len(p1.queue), "P1": busy(p1),
+            "Q02": len(p2.queue), "P2": busy(p2),
+            "Q1": len(l1.queue), "L1": busy(l1),
+            "Q2": len(l2.queue), "L2": busy(l2),
+            "n": tuple(self.in_node(k) for k in DIRECTIONS),
             "B": tuple(int(b.blocked) for b in self.blocking),
             "N_in": tuple(s.n_in for s in self.sources),
             "N_fail": tuple(s.n_fail for s in self.sources),
-            "N_out": tuple(len(x.sojourn) for x in self.exits),
+            "N_out": tuple(x.n_out for x in self.exits),
         }
 
     def snapshot(self):
-        profit = sum(len(self.exits[k].sojourn) * self.p.margin(k)
+        profit = sum(self.exits[k].n_out * self.p.margin(k)
                      for k in DIRECTIONS)
         return {"t": self.t, "profit_rate": profit / (self.t - self.t_start),
-                "in_system": tuple(b.n for b in self.blocking)}
+                "in_system": tuple(self.in_node(k) for k in DIRECTIONS)}
 
 
 def format_record(r):
     return (f"{r['t']:9.3f} | {r['event']:<30} | "
-            f"Q0={r['Q0']:<4} P={r['P']:<5} | "
+            f"Q01={r['Q01']} P1={r['P1']:<5} "
+            f"Q02={r['Q02']} P2={r['P2']:<5} | "
             f"Q1={r['Q1']} L1={r['L1']:<5} | Q2={r['Q2']} L2={r['L2']:<5} | "
             f"n={r['n'][0]},{r['n'][1]} B={r['B'][0]},{r['B'][1]} | "
             f"вх={r['N_in'][0]},{r['N_in'][1]} "

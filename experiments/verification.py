@@ -53,10 +53,10 @@ def protocol_fragment(params, name, n_events, t_mod):
 
     SwitchingNodeModel(params, seed=SEED, protocol=keep).simulate(t_mod)
     rows = [{
-        "t": f"{r['t']:.3f}", "подія": r["event"], "Q0": r["Q0"],
-        "P": r["P"], "Q1": r["Q1"], "L1": r["L1"], "Q2": r["Q2"],
-        "L2": r["L2"], "n1": r["n"][0], "n2": r["n"][1],
-        "B1": r["B"][0], "B2": r["B"][1],
+        "t": f"{r['t']:.3f}", "подія": r["event"],
+        "Q01": r["Q01"], "P1": r["P1"], "Q02": r["Q02"], "P2": r["P2"],
+        "Q1": r["Q1"], "L1": r["L1"], "Q2": r["Q2"], "L2": r["L2"],
+        "n": f"{r['n'][0]}/{r['n'][1]}", "B": f"{r['B'][0]}/{r['B'][1]}",
         "вх": f"{r['N_in'][0]}/{r['N_in'][1]}",
         "відм": f"{r['N_fail'][0]}/{r['N_fail'][1]}",
         "перед": f"{r['N_out'][0]}/{r['N_out'][1]}",

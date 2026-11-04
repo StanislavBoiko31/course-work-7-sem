@@ -15,7 +15,7 @@ RESULTS.mkdir(exist_ok=True)
 
 T_WARMUP = 200.0
 T_MOD = 40000.0
-N_RUNS = 35
+N_RUNS = 45
 
 
 def replicate(params, n_runs=N_RUNS, t_mod=T_MOD, t_warmup=T_WARMUP,

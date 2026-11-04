@@ -1,5 +1,6 @@
 import csv
 import math
+import statistics
 
 import matplotlib.pyplot as plt
 
@@ -60,8 +61,6 @@ def summarize(name, params):
         "L2": avg(lambda r: r.mean_qline[1]),
         "W1": avg(lambda r: r.sojourn_mean[0]),
         "W2": avg(lambda r: r.sojourn_mean[1]),
-        "sW1": avg(lambda r: r.sojourn_sd[0]),
-        "sW2": avg(lambda r: r.sojourn_sd[1]),
     }
 
 
@@ -70,18 +69,18 @@ def sojourn_histograms():
     rows = []
     for (name, params), color in ((VARIANTS[0], "tab:gray"),
                                   (VARIANTS[3], "tab:green")):
-        model = SwitchingNodeModel(params, seed=1)
+        model = SwitchingNodeModel(params, seed=1, keep_sojourn=True)
         r = model.simulate(T_MOD * 5, T_WARMUP)
         for k, ax in enumerate(axes):
-            values = model.exits[k].sojourn
+            values = model.exits[k].values
             ax.hist(values, bins=40, range=(0, 30), density=True,
                     alpha=0.6, color=color, label=name)
             rows.append({"варіант": name, "напрям": k + 1,
                          "n": len(values),
                          "середнє": round(r.sojourn_mean[k], 3),
-                         "СКВ": round(r.sojourn_sd[k], 3),
-                         "min": round(r.sojourn_min[k], 3),
-                         "max": round(r.sojourn_max[k], 3)})
+                         "СКВ": round(statistics.stdev(values), 3),
+                         "min": round(min(values), 3),
+                         "max": round(max(values), 3)})
     for k, ax in enumerate(axes):
         ax.set_title(f"Напрям {k + 1}")
         ax.set_xlabel("Час перебування у вузлі, мкс")

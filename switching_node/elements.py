@@ -8,7 +8,6 @@ INF = math.inf
 @dataclass
 class Message:
     id: int
-    direction: int
     t_enter: float
 
 
@@ -28,14 +27,25 @@ class Element:
 
 
 class RouteBlocking(Element):
-    def __init__(self, name, limit):
+    def __init__(self, name, condition):
         super().__init__(name)
-        self.limit = limit
-        self.n = 0
+        self.condition = condition
 
     @property
     def blocked(self):
-        return self.n >= self.limit
+        return self.condition()
+
+
+class Synchronization(RouteBlocking):
+    def __init__(self, name, condition):
+        super().__init__(name, condition)
+        self.devices = []
+
+    def start_next(self, t):
+        waiting = [d for d in self.devices if d.queue]
+        if waiting:
+            d = min(waiting, key=lambda d: d.queue[0].id)
+            d.start(d.queue.popleft(), t)
 
 
 class Create(Element):
@@ -61,18 +71,20 @@ class Create(Element):
         if self.blocking.blocked:
             self.n_fail += 1
             return f"надходження н{k}: відмова"
-        msg = Message(next(self.ids), self.direction, t)
-        self.blocking.n += 1
+        msg = Message(next(self.ids), t)
         self.next_element.in_act(msg, t)
         return f"надходження н{k}: #{msg.id}"
 
 
 class Process(Element):
-    def __init__(self, name, delay, route, event):
+    def __init__(self, name, delay, next_element, event, sync=None):
         super().__init__(name)
         self.delay = delay
-        self.route = route
+        self.next_element = next_element
         self.event = event
+        self.sync = sync
+        if sync:
+            sync.devices.append(self)
         self.queue = deque()
         self.current = None
         self.reset_stats()
@@ -81,40 +93,52 @@ class Process(Element):
         self.busy_time = 0.0
         self.queue_time = 0.0
 
+    @property
+    def busy(self):
+        return int(self.current is not None)
+
     def in_act(self, msg, t):
-        if self.current is None:
-            self._start(msg, t)
-        else:
+        blocked = self.sync.blocked if self.sync else self.busy
+        if blocked:
             self.queue.append(msg)
+        else:
+            self.start(msg, t)
 
     def out_act(self, t):
         msg = self.current
         self.current = None
         self.tnext = INF
-        if self.queue:
-            self._start(self.queue.popleft(), t)
-        self.route(msg).in_act(msg, t)
-        return self.event.format(id=msg.id, k=msg.direction + 1)
+        if self.sync:
+            self.sync.start_next(t)
+        elif self.queue:
+            self.start(self.queue.popleft(), t)
+        self.next_element.in_act(msg, t)
+        return self.event.format(id=msg.id)
 
-    def _start(self, msg, t):
+    def start(self, msg, t):
         self.current = msg
         self.tnext = t + self.delay()
 
     def do_statistics(self, dt):
-        if self.current is not None:
-            self.busy_time += dt
+        self.busy_time += self.busy * dt
         self.queue_time += len(self.queue) * dt
 
 
 class Dispose(Element):
-    def __init__(self, name, blocking):
+    def __init__(self, name, keep_values=False):
         super().__init__(name)
-        self.blocking = blocking
+        self.keep_values = keep_values
         self.reset_stats()
 
     def reset_stats(self):
-        self.sojourn = []
+        self.n_out = 0
+        self.sum_in = 0.0
+        self.sum_out = 0.0
+        self.values = []
 
     def in_act(self, msg, t):
-        self.blocking.n -= 1
-        self.sojourn.append(t - msg.t_enter)
+        self.n_out += 1
+        self.sum_in += msg.t_enter
+        self.sum_out += t
+        if self.keep_values:
+            self.values.append(t - msg.t_enter)

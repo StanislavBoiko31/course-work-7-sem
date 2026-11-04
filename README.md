@@ -14,9 +14,11 @@
 ```
 switching_node/          алгоритм імітації (пакет)
   params.py              вхідні змінні та параметри (ModelParams)
-  distributions.py       генератори norm(d, s), unif(d, s) (FunRand)
+  distributions.py       генератори norm(d, s) (random.gauss), unif(d, s)
+                         (random.uniform) (FunRand)
   elements.py            елементи мережі МО: Element і нащадки Create,
-                         RouteBlocking, Process, Dispose; Message
+                         RouteBlocking, Synchronization, Process,
+                         Dispose; Message
   node.py                SwitchingNodeModel: мережа вузла за рис. 2.1,
                          алгоритм імітації (simulate, run), вихідні
                          характеристики (Results), протокол
@@ -26,7 +28,7 @@ experiments/             код експериментального дослі�
   verification.py        таблиця верифікації, фрагменти протоколу
   transient.py           перехідний період, пілот по сітці, тривалість
                          прогону (T_mod = 40 000 мкс)
-  replications.py        кількість прогонів (нерівність Чебишева, p = 35)
+  replications.py        кількість прогонів (нерівність Чебишева, p = 45)
   optimization.py        перебір + уточнення
   proposals.py           пробні прогони пропозицій, розподіл часу у вузлі
 results/                 CSV і графіки (PNG, SVG), які наводяться в записці

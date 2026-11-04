@@ -11,9 +11,7 @@ def print_results(r):
               f"передано {r.n_out[k]} (λ = {r.throughput[k]:.4f} 1/мкс)")
         print(f"  лінія {k + 1}: завантаження {r.util_line[k]:.4f}, "
               f"середня черга {r.mean_qline[k]:.3f}")
-        print(f"  час у вузлі {r.sojourn_mean[k]:.2f} ± "
-              f"{r.sojourn_sd[k]:.2f} мкс "
-              f"[{r.sojourn_min[k]:.2f}; {r.sojourn_max[k]:.2f}]")
+        print(f"  середній час у вузлі {r.sojourn_mean[k]:.2f} мкс")
     print(f"Процесор: завантаження {r.util_proc:.4f}, "
           f"середня черга {r.mean_q0:.3f}")
     print(f"Економічна ефективність {r.profit_rate:.4f} гр. од./мкс")
