@@ -17,8 +17,7 @@ switching_node/          алгоритм імітації (пакет)
   distributions.py       генератори norm(d, s) (random.gauss), unif(d, s)
                          (random.uniform) (FunRand)
   elements.py            елементи мережі МО: Element і нащадки Create,
-                         RouteBlocking, Synchronization, Process,
-                         Dispose; Message
+                         RouteBlocking, Process, Dispose; Message
   node.py                SwitchingNodeModel: мережа вузла за рис. 2.1,
                          алгоритм імітації (simulate, run), вихідні
                          характеристики (Results), протокол

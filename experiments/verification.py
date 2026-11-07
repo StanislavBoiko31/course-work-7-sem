@@ -27,18 +27,28 @@ CASES = [
 def verification_table():
     rows = []
     for i, (name, params) in enumerate(CASES, start=1):
-        r = SwitchingNodeModel(params, seed=SEED).simulate(T_VERIFY)
+        k_max = []
+
+        def sync_check(rec):
+            k_max.append((rec["P1"] != "-") + (rec["P2"] != "-"))
+
+        r = SwitchingNodeModel(params, seed=SEED,
+                               protocol=sync_check).simulate(T_VERIFY)
         rows.append({
             "№": i, "зміна": name,
             "λ1": round(r.throughput[0], 4), "λ2": round(r.throughput[1], 4),
             "P1": round(r.p_fail[0], 4), "P2": round(r.p_fail[1], 4),
+            "ρP1": round(r.util_proc_k[0], 4),
+            "ρP2": round(r.util_proc_k[1], 4),
             "ρP": round(r.util_proc, 4),
             "ρL1": round(r.util_line[0], 4), "ρL2": round(r.util_line[1], 4),
+            "L01": round(r.mean_q0k[0], 3), "L02": round(r.mean_q0k[1], 3),
             "L0": round(r.mean_q0, 3),
             "L1": round(r.mean_qline[0], 3), "L2": round(r.mean_qline[1], 3),
             "W1": round(r.sojourn_mean[0], 2),
             "W2": round(r.sojourn_mean[1], 2),
             "E": round(r.profit_rate, 4),
+            "подій": len(k_max), "max(KP1+KP2)": max(k_max),
         })
         print(rows[-1])
     save_csv("verification.csv", rows)

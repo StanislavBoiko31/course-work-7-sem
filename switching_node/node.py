@@ -2,8 +2,7 @@ import itertools
 from dataclasses import dataclass
 
 from .distributions import FunRand
-from .elements import (Create, Dispose, Process, RouteBlocking,
-                       Synchronization)
+from .elements import Create, Dispose, Process, RouteBlocking
 from .params import ModelParams
 
 DIRECTIONS = (0, 1)
@@ -18,8 +17,10 @@ class Results:
     p_fail: tuple
     throughput: tuple
     util_proc: float
+    util_proc_k: tuple
     util_line: tuple
     mean_q0: float
+    mean_q0k: tuple
     mean_qline: tuple
     sojourn_mean: tuple
     profit_rate: float
@@ -37,14 +38,14 @@ class SwitchingNodeModel:
                               self.exits[k],
                               f"кінець передачі #{{id}} лінією {k + 1}")
                       for k in DIRECTIONS]
-        self.sync = Synchronization(
+        self.proc_blocking = RouteBlocking(
             "BP", lambda: self.processors[0].busy
             + self.processors[1].busy == 1)
         self.processors = [
             Process(f"P{k + 1}",
                     lambda: rand[2].unif(p.proc_mean, p.proc_half),
                     self.lines[k], f"кінець обробки #{{id}} у P{k + 1}",
-                    self.sync)
+                    self.proc_blocking)
             for k in DIRECTIONS]
         self.blocking = [
             RouteBlocking(f"B{k + 1}",
@@ -57,7 +58,7 @@ class SwitchingNodeModel:
                    self.blocking[k], self.processors[k], ids)
             for k in DIRECTIONS]
         self.timed = [*self.sources, *self.processors, *self.lines]
-        self.stat = [*self.processors, *self.lines]
+        self.devices = [*self.processors, *self.lines]
         self.order = rand[3]
         self.protocol = protocol
         self.t = 0.0
@@ -86,19 +87,27 @@ class SwitchingNodeModel:
                 self.order.shuffle(events)
             for e in events:
                 text = e.out_act(self.t)
+                self.start_devices(self.t)
                 if self.protocol:
                     self.protocol(self.record(text))
+
+    def start_devices(self, t):
+        while True:
+            ready = [d for d in self.devices if d.can_start]
+            if not ready:
+                return
+            min(ready, key=lambda d: d.queue[0].id).start(t)
 
     def _advance(self, t_next):
         dt = t_next - self.t
         if dt > 0.0:
-            for e in self.stat:
+            for e in self.devices:
                 e.do_statistics(dt)
         self.t = t_next
 
     def _reset_stats(self):
         self.t_start = self.t
-        for e in [*self.sources, *self.stat, *self.exits]:
+        for e in [*self.sources, *self.devices, *self.exits]:
             e.reset_stats()
 
     def results(self):
@@ -112,8 +121,10 @@ class SwitchingNodeModel:
             p_fail=tuple(f / n if n else 0.0 for f, n in zip(n_fail, n_in)),
             throughput=tuple(n / T for n in n_out),
             util_proc=sum(e.busy_time for e in self.processors) / T,
+            util_proc_k=tuple(e.busy_time / T for e in self.processors),
             util_line=tuple(e.busy_time / T for e in self.lines),
             mean_q0=sum(e.queue_time for e in self.processors) / T,
+            mean_q0k=tuple(e.queue_time / T for e in self.processors),
             mean_qline=tuple(e.queue_time / T for e in self.lines),
             sojourn_mean=tuple((x.sum_out - x.sum_in) / x.n_out
                                if x.n_out else 0.0 for x in self.exits),

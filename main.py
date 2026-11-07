@@ -12,8 +12,10 @@ def print_results(r):
         print(f"  лінія {k + 1}: завантаження {r.util_line[k]:.4f}, "
               f"середня черга {r.mean_qline[k]:.3f}")
         print(f"  середній час у вузлі {r.sojourn_mean[k]:.2f} мкс")
-    print(f"Процесор: завантаження {r.util_proc:.4f}, "
-          f"середня черга {r.mean_q0:.3f}")
+    print(f"Процесор: завантаження {r.util_proc:.4f} "
+          f"(P1 {r.util_proc_k[0]:.4f}, P2 {r.util_proc_k[1]:.4f}), "
+          f"середня черга {r.mean_q0:.3f} "
+          f"(Q01 {r.mean_q0k[0]:.3f}, Q02 {r.mean_q0k[1]:.3f})")
     print(f"Економічна ефективність {r.profit_rate:.4f} гр. од./мкс")
 
 

@@ -36,18 +36,6 @@ class RouteBlocking(Element):
         return self.condition()
 
 
-class Synchronization(RouteBlocking):
-    def __init__(self, name, condition):
-        super().__init__(name, condition)
-        self.devices = []
-
-    def start_next(self, t):
-        waiting = [d for d in self.devices if d.queue]
-        if waiting:
-            d = min(waiting, key=lambda d: d.queue[0].id)
-            d.start(d.queue.popleft(), t)
-
-
 class Create(Element):
     def __init__(self, name, direction, delay, blocking, next_element,
                  ids):
@@ -77,14 +65,12 @@ class Create(Element):
 
 
 class Process(Element):
-    def __init__(self, name, delay, next_element, event, sync=None):
+    def __init__(self, name, delay, next_element, event, blocking=None):
         super().__init__(name)
         self.delay = delay
         self.next_element = next_element
         self.event = event
-        self.sync = sync
-        if sync:
-            sync.devices.append(self)
+        self.blocking = blocking
         self.queue = deque()
         self.current = None
         self.reset_stats()
@@ -97,26 +83,23 @@ class Process(Element):
     def busy(self):
         return int(self.current is not None)
 
+    @property
+    def can_start(self):
+        blocked = self.blocking.blocked if self.blocking else False
+        return bool(self.queue) and not self.busy and not blocked
+
     def in_act(self, msg, t):
-        blocked = self.sync.blocked if self.sync else self.busy
-        if blocked:
-            self.queue.append(msg)
-        else:
-            self.start(msg, t)
+        self.queue.append(msg)
 
     def out_act(self, t):
         msg = self.current
         self.current = None
         self.tnext = INF
-        if self.sync:
-            self.sync.start_next(t)
-        elif self.queue:
-            self.start(self.queue.popleft(), t)
         self.next_element.in_act(msg, t)
         return self.event.format(id=msg.id)
 
-    def start(self, msg, t):
-        self.current = msg
+    def start(self, t):
+        self.current = self.queue.popleft()
         self.tnext = t + self.delay()
 
     def do_statistics(self, dt):
