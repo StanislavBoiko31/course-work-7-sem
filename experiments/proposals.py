@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 from switching_node import ModelParams, SwitchingNodeModel
 
-from .common import (RESULTS, T_MOD, T_WARMUP, finish, mean_sd, replicate,
-                     save_csv, setup_plots)
+from .common import (RESULTS, T_MOD, T_WARMUP, finish, mean_sd, new_seeds,
+                     replicate, save_csv, setup_plots, start_experiment)
 
 N_TRIAL = 200
 BASE = ModelParams()
@@ -73,7 +73,8 @@ def sojourn_histograms():
     rows = []
     for (name, params), color in ((VARIANTS[0], "tab:gray"),
                                   (VARIANTS[3], "tab:green")):
-        model = SwitchingNodeModel(params, seed=1, keep_sojourn=True)
+        model = SwitchingNodeModel(params, seed=new_seeds(1)[0],
+                                   keep_sojourn=True)
         r = model.simulate(T_MOD * 5, T_WARMUP)
         for k, ax in enumerate(axes):
             values = model.exits[k].values
@@ -81,10 +82,10 @@ def sojourn_histograms():
                     alpha=0.6, color=color, label=name)
             rows.append({"варіант": name, "напрям": k + 1,
                          "n": len(values),
-                         "середнє": round(r.sojourn_mean[k], 3),
-                         "СКВ": round(statistics.stdev(values), 3),
-                         "min": round(min(values), 3),
-                         "max": round(max(values), 3)})
+                         "середнє": round(r.sojourn_mean[k], 4),
+                         "СКВ": round(statistics.stdev(values), 4),
+                         "min": round(min(values), 4),
+                         "max": round(max(values), 4)})
     for k, ax in enumerate(axes):
         ax.set_title(f"Напрям {k + 1}")
         ax.set_xlabel("Час перебування у вузлі, мкс")
@@ -95,6 +96,7 @@ def sojourn_histograms():
 
 
 def main():
+    start_experiment("proposals")
     setup_plots()
     rows = []
     for name, params in VARIANTS:

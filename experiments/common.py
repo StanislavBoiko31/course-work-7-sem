@@ -1,5 +1,7 @@
 import csv
 import math
+import random
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -15,13 +17,43 @@ RESULTS.mkdir(exist_ok=True)
 
 T_WARMUP = 200.0
 T_MOD = 40000.0
-N_RUNS = 45
+N_RUNS = 36
+
+_seed_rng = random.Random()
+_used_seeds = set()
 
 
-def replicate(params, n_runs=N_RUNS, t_mod=T_MOD, t_warmup=T_WARMUP,
-              seed0=1):
-    return [SwitchingNodeModel(params, seed=seed0 + i)
-            .simulate(t_mod, t_warmup) for i in range(n_runs)]
+def start_experiment(name):
+    if "--seed" in sys.argv:
+        seed = int(sys.argv[sys.argv.index("--seed") + 1])
+    else:
+        seed = random.SystemRandom().randrange(1, 2 ** 31)
+    _seed_rng.seed(seed)
+    _used_seeds.clear()
+    path = RESULTS / "seeds.csv"
+    rows = []
+    if path.exists():
+        with open(path, encoding="utf-8-sig") as f:
+            rows = [r for r in csv.DictReader(f, delimiter=";")
+                    if r["дослід"] != name]
+    save_csv("seeds.csv", rows + [{"дослід": name, "зерно": seed}])
+    print(f"{name}: початкове зерно {seed}", flush=True)
+    return seed
+
+
+def new_seeds(n):
+    seeds = []
+    while len(seeds) < n:
+        s = _seed_rng.randrange(1, 2 ** 31)
+        if s not in _used_seeds:
+            _used_seeds.add(s)
+            seeds.append(s)
+    return seeds
+
+
+def replicate(params, n_runs=N_RUNS, t_mod=T_MOD, t_warmup=T_WARMUP):
+    return [SwitchingNodeModel(params, seed=s).simulate(t_mod, t_warmup)
+            for s in new_seeds(n_runs)]
 
 
 def mean_sd(values):

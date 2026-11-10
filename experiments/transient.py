@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 
 from switching_node import ModelParams, SwitchingNodeModel
 
-from .common import finish, mean_sd, save_csv, setup_plots
+from .common import (finish, mean_sd, new_seeds, save_csv, setup_plots,
+                     start_experiment)
 from .optimization import T1_RANGE, T2_RANGE, frange
 
 EPS = 0.05
@@ -24,7 +25,7 @@ def pilot():
             params = ModelParams().with_lines(t1, t2)
             e, sd = mean_sd([SwitchingNodeModel(params, seed=seed)
                              .simulate(T_PILOT, T_WARMUP).profit_rate
-                             for seed in range(1, N_PILOT + 1)])
+                             for seed in new_seeds(N_PILOT)])
             rows.append({"t1": t1, "t2": t2, "E": round(e, 4),
                          "sigma": round(sd, 5)})
     rows.sort(key=lambda r: -r["sigma"])
@@ -48,7 +49,7 @@ def trajectory(model, t_mod, step, t_warmup=0.0):
 def trajectories(params, n_runs, t_mod, step, t_warmup=0.0):
     return [trajectory(SwitchingNodeModel(params, seed=seed), t_mod, step,
                        t_warmup)
-            for seed in range(1, n_runs + 1)]
+            for seed in new_seeds(n_runs)]
 
 
 def settle_time(trajs, eps):
@@ -67,8 +68,8 @@ def settle_time(trajs, eps):
 
 def ensemble_in_system(params, n_runs, t_mod, step):
     sums = None
-    for seed in range(1, n_runs + 1):
-        traj = trajectory(SwitchingNodeModel(params, seed=1000 + seed),
+    for seed in new_seeds(n_runs):
+        traj = trajectory(SwitchingNodeModel(params, seed=seed),
                           t_mod, step)
         n = [sum(s["in_system"]) for s in traj]
         sums = n if sums is None else [a + b for a, b in zip(sums, n)]
@@ -84,7 +85,7 @@ def settle_row(t1, t2, trajs, T):
     for t in (20000, 40000):
         v = [tr[round((t - T_WARMUP) / STEP) - 1]["profit_rate"]
              for tr in trajs]
-        row[f"spread_{t}"] = round(max(v) - min(v), 4)
+        row[f"spread_{t}"] = round(max(v) - min(v), 6)
     return row
 
 
@@ -145,6 +146,7 @@ def plot_ensemble(points):
 
 
 def main():
+    start_experiment("transient")
     setup_plots()
     plot_ensemble([(7.0, 8.0), (6.0, 4.5), (3.0, 3.0)])
     ranked = pilot()

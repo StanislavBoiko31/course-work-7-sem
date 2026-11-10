@@ -7,7 +7,7 @@ import numpy as np
 from switching_node import ModelParams
 
 from .common import (N_RUNS, RESULTS, finish, mean_sd, replicate, save_csv,
-                     setup_plots)
+                     setup_plots, start_experiment)
 
 T1_RANGE = (3.0, 7.0)
 T2_RANGE = (3.0, 8.0)
@@ -105,6 +105,7 @@ def rounded(rows):
 
 
 def main():
+    start_experiment("optimization")
     setup_plots()
     coarse = grid_search(frange(*T1_RANGE, 0.5), frange(*T2_RANGE, 0.5))
     save_csv("optimization_coarse.csv", rounded(coarse))

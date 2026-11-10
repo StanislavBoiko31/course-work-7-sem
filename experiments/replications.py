@@ -3,7 +3,7 @@ import csv
 from switching_node import ModelParams
 
 from .common import (RESULTS, T_MOD, T_WARMUP, mean_sd, replicate,
-                     runs_needed, save_csv)
+                     runs_needed, save_csv, start_experiment)
 
 EPS = 0.01
 N_PILOT = 50
@@ -18,6 +18,7 @@ def most_variable(n=3):
 
 
 def main():
+    start_experiment("replications")
     rows = []
     for t1, t2 in POINTS + most_variable():
         params = ModelParams().with_lines(t1, t2)
